@@ -1,0 +1,11 @@
+server:
+  http:
+    port: ":8080"
+  ftp:
+    port: ":2121"
+    user: "ftpuser"
+    password: "ftppassword"
+
+database:
+  driver: "sqlite3"
+  source: "./data/database.db"
