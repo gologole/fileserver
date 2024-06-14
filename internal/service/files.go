@@ -11,7 +11,7 @@ func (s *ServiceStruct) GetFile(conn *websocket.Conn, request models.FileRequest
 	fileChan := make(chan []byte)
 	errChan := make(chan error)
 
-	go s.Decompress(request.Login, request.Password, request.ID, fileChan, errChan)
+	go s.storage.GetFilePartByID(request.Login, request.Password, request.ID, fileChan, errChan)
 
 	select {
 	case file := <-fileChan:

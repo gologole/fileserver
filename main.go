@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"main.go/config"
 	"main.go/internal/api"
@@ -25,36 +26,25 @@ func InitLogger() {
 	Logger = log.New(file, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func MigrateDatabase(dbConfig config.DatabaseConfig) (*sql.DB, error) {
-	// Устанавливаем соединение с базой данных SQLite
-	db, err := sql.Open(dbConfig.Driver, dbConfig.Source)
+func MigrateDatabase(dbPath string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Проверяем, существует ли файл базы данных
-	if _, err := os.Stat(dbConfig.Source); err == nil {
-		// Если файл существует, возвращаем указатель на sql.DB
-		return db, sql.ErrConnDone
-	}
+	createTableSQL := `
+    CREATE TABLE IF NOT EXISTS records (
+        id TEXT PRIMARY KEY,
+        login TEXT,
+        password TEXT,
+        metadata TEXT,
+        file BLOB,
+        hash TEXT
+    );`
 
-	// Создаем файл базы данных
-	file, err := os.Create(dbConfig.Source)
+	_, err = db.Exec(createTableSQL)
 	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Создаем таблицу users
-	_, err = db.Exec(`
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            password TEXT NOT NULL,
-            file BLOB,
-            hash TEXT
-        )`)
-	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -66,7 +56,7 @@ func main() {
 
 	Config := config.Conf
 
-	db, err := MigrateDatabase(Config.Database)
+	db, err := MigrateDatabase(Config.Database.Source)
 	if err != nil {
 		if err == sql.ErrConnDone {
 			log.Println("База данных уже существует")
@@ -84,20 +74,29 @@ func main() {
 		}
 	}()
 
+	fmt.Println("инициализация хранилища")
 	Mystorage := storage.NewStorage(db)
+	fmt.Println("инициализация сервиса")
 	MyService := service.NewService(Mystorage)
-	MyHandler := api.NewMyHandler(&MyService)
+	fmt.Println("инициализация хендлеров")
+	MyHandler := api.NewMyHandler(MyService)
 
+	fmt.Println("инициализация сервера")
 	server := new(server.Server)
 
 	Logger.Println("Starting server on port", config.Conf.Server.HTTP.Port)
-	if Config.Server.HTTP.ScheduledShutdown == 0 {
 
+	if Config.Server.HTTP.ScheduledShutdown == 0 {
+		fmt.Println("Запуск сервера")
+		if err := server.RunServer(MyHandler.InitRouts()); err != nil {
+			log.Fatal("Server start error: ", err)
+		}
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), Config.Server.HTTP.ScheduledShutdown)
 		defer cancel() //на случай принудительного завершения
 
 		go func(ctx context.Context) {
+			fmt.Println("Запуск сервера c запланированным окончанием работы")
 			if err := server.RunServer(MyHandler.InitRouts()); err != nil {
 				log.Fatal("Server start error: ", err)
 			}

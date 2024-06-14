@@ -31,6 +31,6 @@ type ServiceStruct struct {
 	storage storage.Storage
 }
 
-func NewService(storage storage.Storage) Service {
-	return &ServiceStruct{storage}
+func NewService(storage storage.Storage) ServiceStruct {
+	return ServiceStruct{storage}
 }

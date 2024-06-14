@@ -34,11 +34,9 @@ func (s *storage) Open() error {
 }
 
 func (s *storage) GetFilePartByID(login, password, id string, partChan chan<- []byte, errChan chan<- error) {
-	// Блокировка доступа к данным на время выполнения запроса
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// SQL-запрос для извлечения файла по ID и проверки логина и пароля
 	query := "SELECT File, Login, Password FROM records WHERE ID=?"
 	row := s.db.QueryRow(query, id)
 
@@ -55,15 +53,13 @@ func (s *storage) GetFilePartByID(login, password, id string, partChan chan<- []
 		return
 	}
 
-	// Проверка логина и пароля
 	if login != retrievedLogin || password != retrievedPassword {
 		errChan <- fmt.Errorf("invalid login/password")
 		close(partChan)
 		return
 	}
 
-	// Отправка частей файла через канал
-	partSize := 1024 // Размер частей файла
+	partSize := 1024
 	for i := 0; i < len(file); i += partSize {
 		end := i + partSize
 		if end > len(file) {
